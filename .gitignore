@@ -1,0 +1,9 @@
+config.env
+*.bak
+*.bak.*
+backup/
+__pycache__/
+*.pyc
+*.log
+btmon*.txt
+*.bin

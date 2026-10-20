@@ -1,0 +1,22 @@
+This repository is licensed under the GNU General Public License,
+version 3 or later (GPL-3.0-or-later). See LICENSE.
+
+Third-party / derived material
+==============================
+
+- configs/bluetooth/main.conf is a backup of a BlueZ main configuration file.
+  BlueZ is licensed under GPL-2.0-or-later. The file is included as a
+  configuration backup; custom values are documented in README.md.
+
+- configs/input-remapper/Bluetooth Keyboard/general.json is a user
+  input-remapper preset, included as a configuration backup.
+
+- The Linux kernel hid-samsung driver is referenced in docs/keyboard-notes.md
+  but is not included in this repository. It is licensed under
+  GPL-2.0-or-later.
+
+- The GPLv3 license text in LICENSE is from the GNU project:
+  https://www.gnu.org/licenses/gpl-3.0.html
+
+No link keys, Bluetooth bonding keys, or MAC addresses from the original
+machine are included. The scripts require a local, gitignored config.env.
