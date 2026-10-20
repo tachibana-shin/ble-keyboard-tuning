@@ -1,0 +1,91 @@
+From: Tachibana Shin <tachibshin@duck.com>
+Subject: [PATCH] Bluetooth: l2cap: reject non-zero LE latency on request
+
+Some LE peripherals ask for non-zero slave latency when idle. The kernel
+currently accepts every request that passes hci_check_conn_params() and
+sends HCI LE Connection Update, so the peripheral can override a host-side
+latency=0 policy. BlueZ may also persist the new parameters in the bond.
+
+Add an opt-in filter in the L2CAP Connection Parameter Update handler.
+When enabled, requests with non-zero latency are answered with
+L2CAP_CONN_PARAM_REJECTED and the current connection parameters are kept.
+Latency=0 requests and all other devices continue to work normally.
+
+The filter is disabled by default. Enable it with
+  reject_le_latency=1
+and optionally restrict it to one device with
+  reject_le_latency_mac=10:11:89:XX:XX:XX
+
+This is a local kernel policy patch, not an upstream submission.
+
+---
+--- a/net/bluetooth/l2cap_core.c
++++ b/net/bluetooth/l2cap_core.c
+@@ -26,6 +26,8 @@
+ /* Bluetooth L2CAP core. */
+ 
+ #include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
+ 
+ #include <linux/debugfs.h>
+ #include <linux/crc16.h>
+@@ -39,6 +41,17 @@
+ 
+ #define LE_FLOWCTL_MAX_CREDITS 65535
+ 
++static bool reject_le_latency;
++module_param(reject_le_latency, bool, 0644);
++MODULE_PARM_DESC(reject_le_latency,
++		 "Reject LE connection parameter updates with non-zero slave latency");
++
++static char reject_le_latency_mac[18] = "";
++module_param_string(reject_le_latency_mac, reject_le_latency_mac,
++		    sizeof(reject_le_latency_mac), 0644);
++MODULE_PARM_DESC(reject_le_latency_mac,
++		 "Only reject for this MAC address (empty = all devices)");
++
+ bool disable_ertm;
+ bool enable_ecred = IS_ENABLED(CONFIG_BT_LE_L2CAP_ECRED);
+ 
+@@ -4764,6 +4777,28 @@
+ 	return 0;
+ }
+ 
++static bool reject_le_latency_for(struct hci_conn *hcon)
++{
++	unsigned int a[6];
++	bdaddr_t addr;
++	int i;
++
++	if (!reject_le_latency)
++		return false;
++
++	if (!reject_le_latency_mac[0])
++		return true;
++
++	if (sscanf(reject_le_latency_mac, "%x:%x:%x:%x:%x:%x",
++		   &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) != 6)
++		return false;
++
++	for (i = 0; i < 6; i++)
++		addr.b[5 - i] = (u8)a[i];
++
++	return !bacmp(&hcon->dst, &addr);
++}
++
+ static inline int l2cap_conn_param_update_req(struct l2cap_conn *conn,
+ 					      struct l2cap_cmd_hdr *cmd,
+ 					      u16 cmd_len, u8 *data)
+@@ -4792,6 +4827,9 @@
+ 	memset(&rsp, 0, sizeof(rsp));
+ 
+ 	err = hci_check_conn_params(min, max, latency, to_multiplier);
++	if (!err && latency && reject_le_latency_for(hcon))
++		err = -EINVAL;
++
+ 	if (err)
+ 		rsp.result = cpu_to_le16(L2CAP_CONN_PARAM_REJECTED);
+ 	else
+--
+2.43.0
